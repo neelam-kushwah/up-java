@@ -1,0 +1,45 @@
+# ********************************************************************************
+#  Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0
+#
+#  SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************/
+
+# Perform requirements tracing against the uProtocol Specification using OpenFastTrace (https://github.com/itsallcode/openfasttrace)
+# Upload tracing report for potential re-use in publication workflow, returns the corresponding download URL as an output on workflow_call
+
+name: Requirements tracing
+
+on:
+  workflow_call:
+    outputs:
+      tracing_report_url:
+        description: 'URL of the requirements tracing report'
+        value: ${{ jobs.tracing.outputs.requirements-tracing-report-url }}
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  tracing:
+    name: Run OpenFastTrace
+    runs-on: ubuntu-latest
+    outputs:
+      requirements-tracing-report-url: ${{ steps.run-oft.outputs.requirements-tracing-report-url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Run OpenFastTrace
+        id: run-oft
+        uses: ./.github/actions/run-oft
+
+      - name: "Determine exit code"
+        run: |
+          exit ${{ steps.run-oft.outputs.requirements-tracing-exit-code }}
