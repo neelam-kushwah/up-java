@@ -1,0 +1,71 @@
+name: "Run OpenFastTrace"
+description: |
+  Runs OpenFastTrace with the trace command on the local up-java workspace.
+outputs:
+  requirements-tracing-exit-code:
+    description: |
+      A flag indicating the outcome of running OpenFastTrace (0: success, 1: failure).
+    value: ${{ steps.run-oft.outputs.requirements-tracing-exit-code }}
+  requirements-tracing-report-url:
+    description: "The URL to the OpenFastTrace HTML report"
+    value: ${{ steps.tracing-report-html.artifact-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare Environment
+      shell: bash
+      run: |
+        echo "TRACING_REPORT_FILE_NAME=requirements-tracing-report.html" >> $GITHUB_ENV
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: "17"
+    - name: Download OpenFastTrace JARs
+      shell: bash
+      env:
+        OFT_REPO_BASE: "https://github.com/itsallcode"
+        OFT_CORE_VERSION: "4.1.0"
+        OFT_ASCIIDOC_PLUGIN_VERSION: "0.2.0"
+      run: |
+        mkdir -p "${{ github.workspace }}/lib"
+        curl -L -o "${{ github.workspace }}/lib/openfasttrace.jar" \
+          "${{ env.OFT_REPO_BASE }}/openfasttrace/releases/download/${{ env.OFT_CORE_VERSION }}/openfasttrace-${{ env.OFT_CORE_VERSION }}.jar"
+        curl -L -o "${{ github.workspace }}/lib/openfasttrace-asciidoc-plugin.jar" \
+          "${{ env.OFT_REPO_BASE }}/openfasttrace-asciidoc-plugin/releases/download/${{ env.OFT_ASCIIDOC_PLUGIN_VERSION }}/openfasttrace-asciidoc-plugin-${{ env.OFT_ASCIIDOC_PLUGIN_VERSION }}-with-dependencies.jar"
+    - name: Verify Files
+      shell: bash
+      run: |
+        echo "Listing contents of the lib directory:"
+        ls -l "${{ github.workspace }}/lib/"
+#        echo "Listing contents of directories and file patterns:"
+#        ls -l *.md *.java .github src/main/java src/test/java up-spec/*.adoc up-spec/*.md || true
+    - name: Run OpenFastTrace
+      id: run-oft
+      shell: bash
+      run: |
+        if java -cp "${{ github.workspace }}/lib/*" \
+          org.itsallcode.openfasttrace.core.cli.CliStarter trace -o html \
+          -f "${{ env.TRACING_REPORT_FILE_NAME }}" \
+          src/main/java \
+          src/test/java \
+          .github \
+          target/up-spec/*.adoc \
+          target/up-spec/*.md \
+          target/up-spec/basics \
+          target/up-spec/up-l2/api.adoc;
+         
+        then
+          echo "requirements-tracing-exit-code=0" >> $GITHUB_OUTPUT
+          echo "All requirements from uProtocol Specification are covered by the project." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "requirements-tracing-exit-code=1" >> $GITHUB_OUTPUT
+          echo "Some requirements from uProtocol Specification are not covered by the project. See attached report for details." >> $GITHUB_STEP_SUMMARY
+        fi
+    - name: Upload tracing report (html)
+      uses: actions/upload-artifact@v4
+      id: tracing-report-html
+      with:
+        name: tracing-report-html
+        path: ${{ env.TRACING_REPORT_FILE_NAME }}
